@@ -16,7 +16,8 @@
 using namespace std;
 
 vector<char *> peers;
-map <char*, map<unsigned char*, int> > ip_sha1;
+//map <char*, map<char*, int> > ip_sha1;
+vector<char *> ip_sha1;
 
 void * seed_function(void* )
 {
@@ -158,15 +159,28 @@ void * client_function( void *)
         	cout << "After accept: " << buffer << endl;
         
         write(new_socket, dummy_buffer, sizeof(dummy_buffer));
+        close(new_socket);
 
-        unsigned char buffer1[1024] = {0};
-        SHA1((const unsigned char*)buffer, strlen(buffer), buffer1);
-        map <unsigned char *, int> v1;
-        v1 = ip_sha1[clientip];
+        size_t length = strlen(buffer);
+        unsigned char result[SHA_DIGEST_LENGTH*2];
+        char buffer1[SHA_DIGEST_LENGTH];
+        SHA1((unsigned char*)buffer, length, result);
+        for(i = 0; i < SHA_DIGEST_LENGTH; i++)
+            snprintf(buffer1+i*2, 3, "%02x", result[i]);
 
-        if(!v1[buffer1])
+        cout << "SHA1: " << buffer1 << endl;
+        //cout << "ip_sha1[clientip][buffer1] : " << ip_sha1[clientip][buffer1] << endl;
+        cout << "Client_IP: " << clientip << endl;
+
+        int found=0;
+        for(int i=0; i<ip_sha1.size(); i++)
+        	if(ip_sha1[i]==buffer1)
+        		found=1;
+
+
+        if(!found)
         {
-    		v1[buffer1] = 1;
+    		ip_sha1.push_back(buffer1);
 
 		    if(peers.size() <= 4)
 		    {
@@ -248,6 +262,7 @@ void * client_function( void *)
 
 				    //write to random IP in random list
 				    write(sock, buffer, sizeof(buffer));
+				    read(sock, dummy_buffer, sizeof(dummy_buffer));
 				    //close this socket
 				    close(sock);
 				}

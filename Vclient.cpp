@@ -32,7 +32,8 @@ char * MY_IP;
 struct IP_Info *peers_ip= (IP_Info *)malloc(sizeof(IP_Info));
 //char * clientip = (char *) malloc(1024*sizeof(char));
 set<int> random_list;
-map <char*, map<unsigned char*, int> > ip_sha1;
+//map <char*, map<char*, int> > ip_sha1;
+vector<char *> ip_sha1;
 
 void * client_function(void *threadarg)
 {
@@ -146,32 +147,39 @@ void * clients_server_function( void *)
         int retval = read(new_socket, buffer, sizeof(buffer));
         if(retval < 0)
         	cout << "Read failed\n";
+        write(new_socket, dummy_buffer, sizeof(dummy_buffer));
+        
 
         cout << "In client_server function read: " << buffer << endl;
         socklen_t addr_size = sizeof(struct sockaddr_in);
         int res = getpeername(new_socket, (struct sockaddr *)&client_addr, &addr_size);
 		char *clientip = new char[16];
         strcpy(clientip, inet_ntoa(client_addr.sin_addr));
+        close(new_socket);
 
-        unsigned char buffer1[1024] = {0};
-        SHA1((unsigned char*)buffer, strlen(buffer), buffer1);
-        map< unsigned char *, int> v1;
-        v1 = ip_sha1[clientip]; 
+        size_t length = strlen(buffer);
+        unsigned char result[SHA_DIGEST_LENGTH*2];
+        char buffer1[SHA_DIGEST_LENGTH];
+        SHA1((unsigned char*)buffer, length, result);
+        for(i = 0; i < SHA_DIGEST_LENGTH; i++)
+            snprintf(buffer1+i*2, 3, "%02x", result[i]);
 
-        if(!v1[buffer1])
+        cout << "SHA1: " << buffer1 << endl; 
+        //cout << "ip_sha1[clientip][buffer1] : " << ip_sha1[clientip][buffer1] << endl;
+        
+        int found=0;
+        for(int i=0; i<ip_sha1.size(); i++)
+            if(ip_sha1[i]==buffer1)
+                found=1;
+
+
+        if(!found)
         {
-        	v1[buffer1] = 1;
+            ip_sha1.push_back(buffer1);
         	for (std::set<int>::iterator it = random_list.begin(); it != random_list.end(); ++it)
     		{
-				int sock;
-			    struct sockaddr_in address; 
-			    int valread; 
-			    struct sockaddr_in serv_addr;  
-			    char dummy_buffer[10]={0};
-
 			    printf("In client_server_function: peers[*it]: %s\n", peers_ip->thread_ip[*it]);
 			    printf("In client_server_function: clientip: %s\n", clientip);
-
 
 			    if(strcmp(peers_ip->thread_ip[*it], clientip))
 				{
@@ -185,6 +193,7 @@ void * clients_server_function( void *)
                         printf("ERR; pthread_create() ret = %d\n", rc); 
                         exit(-1); 
                     } 
+                    pthread_join(thread_id, NULL);
                     //client_function(buffer, peers_ip->thread_ip[*it]);
 				}
 			}
@@ -301,16 +310,23 @@ int main(int argc, char const *argv[])
 		strcat(buffer,":");
 		strcat(buffer, MY_IP);
 		strcat(buffer, " pays <N> BTC to ");
-		int index = rand()%(peers_ip->no_peers);
+		int i, index = rand()%(peers_ip->no_peers);
 		strcat(buffer, peers_ip->thread_ip[index]);
 
-		unsigned char buffer1[1024] = {0};
-        SHA1((unsigned char*)buffer, strlen(buffer), buffer1);
-        //map< unsigned char *, int> v1;
+        cout << "Before SHA1: " << buffer << endl;
+
+        size_t length = strlen(buffer);
+        unsigned char result[SHA_DIGEST_LENGTH*2];
+        char buffer1[SHA_DIGEST_LENGTH];
+        SHA1((unsigned char*)buffer, length, result);
+        for(i = 0; i < SHA_DIGEST_LENGTH; i++)
+            snprintf(buffer1+i*2, 3, "%02x", result[i]);
+        
+        cout << "SHA1: " << buffer1 << endl;
         cout << "Before sending: " << buffer << endl;
         for (std::set<int>::iterator it = random_list.begin(); it != random_list.end(); ++it)
         {
-            ip_sha1[peers_ip->thread_ip[*it]][buffer1] = 1;
+            ip_sha1.push_back(buffer1);
             pthread_t thread_id;
             client_data_t *cdata = (client_data_t *) malloc(sizeof(client_data_t));
             cdata->buffer = buffer;
@@ -321,6 +337,7 @@ int main(int argc, char const *argv[])
                 printf("ERR; pthread_create() ret = %d\n", rc); 
                 exit(-1); 
             } 
+            pthread_join(thread_id, NULL);
             //client_function(buffer, peers_ip->thread_ip[*it]);
         }
 		sleep(5);
