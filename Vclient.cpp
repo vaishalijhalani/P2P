@@ -10,6 +10,7 @@
 #include <set>
 #include <openssl/sha.h>
 #include <chrono> 
+#include <fstream> 
 
 using namespace std; 
 
@@ -19,7 +20,11 @@ struct IP_Info
 	char thread_ip[1024][1024];
 	int no_peers;
 };
-
+struct IP_SHA1
+{
+    char sha1[10000][1024];
+    int no_entry;
+};
 typedef struct client_function_data { 
    char *buffer;
    char * ip_to_send;
@@ -30,10 +35,11 @@ typedef struct client_function_data {
 int MY_PORT;
 char * MY_IP;
 struct IP_Info *peers_ip= (IP_Info *)malloc(sizeof(IP_Info));
+struct IP_SHA1 *ip_sha1 = (IP_SHA1 *)malloc(sizeof(IP_SHA1));
 //char * clientip = (char *) malloc(1024*sizeof(char));
 set<int> random_list;
 //map <char*, map<char*, int> > ip_sha1;
-vector<char *> ip_sha1;
+//vector<char *> ip_sha1;
 
 void * client_function(void *threadarg)
 {
@@ -159,23 +165,37 @@ void * clients_server_function( void *)
 
         size_t length = strlen(buffer);
         unsigned char result[SHA_DIGEST_LENGTH*2];
-        char buffer1[SHA_DIGEST_LENGTH];
+        //char* buffer1 = new char[SHA_DIGEST_LENGTH];
+        char buffer1[SHA_DIGEST_LENGTH*2];
         SHA1((unsigned char*)buffer, length, result);
         for(i = 0; i < SHA_DIGEST_LENGTH; i++)
             snprintf(buffer1+i*2, 3, "%02x", result[i]);
 
         cout << "SHA1: " << buffer1 << endl; 
-        //cout << "ip_sha1[clientip][buffer1] : " << ip_sha1[clientip][buffer1] << endl;
         
         int found=0;
-        for(int i=0; i<ip_sha1.size(); i++)
-            if(ip_sha1[i]==buffer1)
+        for(int i=0; i<ip_sha1->no_entry; i++)
+            if(strcmp(ip_sha1->sha1[i],buffer1)==0)
                 found=1;
 
+        printf("ip_sha1->sha1[i]: %s\n", ip_sha1->sha1[--i]);
+        printf("buffer1: %s\n", buffer1);
 
-        if(!found)
+
+        if(found==0)
         {
-            ip_sha1.push_back(buffer1);
+            strcpy(ip_sha1->sha1[ip_sha1->no_entry], buffer1);
+            //printf("What's stored?: %s\n", ip_sha1->sha1[ip_sha1->no_entry]);
+            ++(ip_sha1->no_entry);
+
+            char msg_store[1024];
+            strcpy(msg_store, buffer);
+            strcat(msg_store, " : RECEIVED FROM ");
+            strcat(msg_store, clientip);
+
+            cout << msg_store << endl;
+
+
         	for (std::set<int>::iterator it = random_list.begin(); it != random_list.end(); ++it)
     		{
 			    printf("In client_server_function: peers[*it]: %s\n", peers_ip->thread_ip[*it]);
@@ -210,6 +230,8 @@ int main(int argc, char const *argv[])
     list< char *> peers_list;
     char buffer[1024] = {0}; 
     char dummy_buffer[10]={0};
+    ip_sha1->no_entry = 0;
+
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
         printf("\n Socket creation error \n"); 
@@ -302,6 +324,7 @@ int main(int argc, char const *argv[])
    
     while(true)
     {
+        char random_num[10];
     	bzero(buffer, sizeof(buffer));
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
@@ -309,8 +332,11 @@ int main(int argc, char const *argv[])
 		snprintf(buffer, sizeof(buffer), "%lld", secondsSinceEpoch);
 		strcat(buffer,":");
 		strcat(buffer, MY_IP);
-		strcat(buffer, " pays <N> BTC to ");
-		int i, index = rand()%(peers_ip->no_peers);
+		strcat(buffer, " pays ");
+        snprintf(random_num, sizeof(random_num), "%d", (rand()%100));
+        strcat(buffer, random_num);
+        strcat(buffer, " BTC to ");
+		int index = rand()%(peers_ip->no_peers);
 		strcat(buffer, peers_ip->thread_ip[index]);
 
         cout << "Before SHA1: " << buffer << endl;
@@ -319,14 +345,16 @@ int main(int argc, char const *argv[])
         unsigned char result[SHA_DIGEST_LENGTH*2];
         char buffer1[SHA_DIGEST_LENGTH];
         SHA1((unsigned char*)buffer, length, result);
-        for(i = 0; i < SHA_DIGEST_LENGTH; i++)
+        for(int i = 0; i < SHA_DIGEST_LENGTH; i++)
             snprintf(buffer1+i*2, 3, "%02x", result[i]);
         
         cout << "SHA1: " << buffer1 << endl;
         cout << "Before sending: " << buffer << endl;
+        strcpy(ip_sha1->sha1[ip_sha1->no_entry], buffer1);
+        ++(ip_sha1->no_entry);
+
         for (std::set<int>::iterator it = random_list.begin(); it != random_list.end(); ++it)
         {
-            ip_sha1.push_back(buffer1);
             pthread_t thread_id;
             client_data_t *cdata = (client_data_t *) malloc(sizeof(client_data_t));
             cdata->buffer = buffer;

@@ -8,6 +8,8 @@
 #include <bits/stdc++.h>
 #include <pthread.h>
 #include <openssl/sha.h>
+#include <fstream> 
+#include <iostream>
 
 #define SEED_PORT 10000 
 #define SEED_IP "127.0.0.1"
@@ -17,7 +19,15 @@ using namespace std;
 
 vector<char *> peers;
 //map <char*, map<char*, int> > ip_sha1;
-vector<char *> ip_sha1;
+//vector<char *> ip_sha1;
+struct IP_SHA1
+{
+    char sha1[10000][1024];
+    int no_entry;
+};
+struct IP_SHA1 *ip_sha1 = (IP_SHA1 *)malloc(sizeof(IP_SHA1));
+
+//ofstream myfile;
 
 void * seed_function(void* )
 {
@@ -163,24 +173,58 @@ void * client_function( void *)
 
         size_t length = strlen(buffer);
         unsigned char result[SHA_DIGEST_LENGTH*2];
-        char buffer1[SHA_DIGEST_LENGTH];
+        char* buffer1 = new char[SHA_DIGEST_LENGTH];
+        //char buffer1[SHA_DIGEST_LENGTH];
         SHA1((unsigned char*)buffer, length, result);
         for(i = 0; i < SHA_DIGEST_LENGTH; i++)
             snprintf(buffer1+i*2, 3, "%02x", result[i]);
 
         cout << "SHA1: " << buffer1 << endl;
-        //cout << "ip_sha1[clientip][buffer1] : " << ip_sha1[clientip][buffer1] << endl;
         cout << "Client_IP: " << clientip << endl;
 
         int found=0;
-        for(int i=0; i<ip_sha1.size(); i++)
-        	if(ip_sha1[i]==buffer1)
+        for(int i=0; i<ip_sha1->no_entry; i++)
+        	if(strcmp(ip_sha1->sha1[i],buffer1)==0)
         		found=1;
 
 
-        if(!found)
+        if(found==0)
         {
-    		ip_sha1.push_back(buffer1);
+    		strcpy(ip_sha1->sha1[ip_sha1->no_entry], buffer1);
+            ++(ip_sha1->no_entry);
+    		
+    		char msg_store[1024];
+    		strcpy(msg_store, buffer);
+    		strcat(msg_store, " : RECEIVED FROM ");
+    		strcat(msg_store, clientip);
+
+    		cout << msg_store << endl;
+
+   //  		fstream myfile;
+			// myfile.open ("example.txt", ios::out | ios::app);
+			// if (myfile.is_open()) 
+			// { /* ok, proceed with output */ 
+			// 	printf("Opened file\n");
+			// 	for(int i=0; i<strlen(buffer); i++)
+			// 		myfile << buffer[i];
+   //  			myfile << "\n";
+   //  			myfile.close();
+			// }
+			// else
+			// 	printf("Unable to open file\n");
+
+			// FILE *fp;
+			// fp= fopen("filename.txt", "a");
+			// if(fp == NULL)
+			// 	printf("Can't open file\n");
+			// printf("Opened\n");
+			// fputs(buffer1, fp);
+			// printf("Before close\n");
+			// fclose(fp);
+
+
+    		printf("Here\n");
+
 
 		    if(peers.size() <= 4)
 		    {
@@ -203,17 +247,6 @@ void * client_function( void *)
 			    int valread; 
 			    struct sockaddr_in serv_addr;  
 			    char dummy_buffer[10]={0};
-			    int no_sock = 0;
-
-			    //printf("In client_function: peers[*it]: %s\n", peers[*it]);
-			    //printf("In client_function: clientip: %s\n", clientip);
-			    //printf("In client_function: strcmp(SEED_IP, peers[*it]): %d\n", 
-			    // strcmp(SEED_IP, peers[*it]));
-			    // printf("In client_function: strcmp(peers[*it], clientip)): %d\n",
-			     // strcmp(peers[*it], clientip));
-			    // printf("In client_function: strcmp(peers[*it], clientip) && 
-					// strcmp(SEED_IP, clientip): %d\n", strcmp(peers[*it], clientip)
-					//  && strcmp(SEED_IP, clientip));
 
 			    if(strcmp(peers[*it], clientip) && strcmp(SEED_IP, peers[*it]))
 			    {
@@ -276,6 +309,8 @@ void * client_function( void *)
 
 int main(int argc, char const *argv[]) 
 { 
+	ip_sha1->no_entry=0;
+	//myfile.open ("example.txt", ios::out | ios::app);
     pthread_t thread_seed_function, thread_client_function;
 
     pthread_create(&thread_seed_function, NULL, seed_function, NULL);
